@@ -80,11 +80,20 @@ function fromStringEnum(val) {
   case "string":
     switch(val.toLowerCase()) {
     case "code":
-    case "data":
       return 0;
     case "dep_group":
-    case "type":
       return 1;
+    // The last 1 bit represents using type hash.
+    // If the last bit is 0, it indicates using code hash to locate the contract code. 
+    // The first 7 bits prepresent the VM version to run the contract code.
+    case "type":
+      return 0b0000000_1;
+    case "data":
+      return 0b0000000_0;
+    case "data1":
+      return 0b0000001_0;
+    case "data2":
+      return 0b0000010_0;
     default:
     throw new Error("Not a valid byte representation: "+val);
     }
