@@ -1,6 +1,6 @@
 {
-  "name": "hw-app-ckb",
-  "version": "0.1.2",
+  "name": "@magickbase/hw-app-ckb",
+  "version": "0.2.0-alpha.0",
   "description": "Ledger Hardware Wallet Nervos CKB API",
   "keywords": [
     "Ledger",
@@ -12,16 +12,18 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/obsidiansystems/hw-app-ckb"
+    "url": "https://github.com/magickbase/hw-app-ckb"
   },
   "bugs": {
-    "url": "https://github.com/obsidiansystems/hw-app-ckb/issues"
+    "url": "https://github.com/magickbase/hw-app-ckb/issues"
   },
-  "homepage": "https://github.com/LedgerHQ/ledgerjs",
+  "homepage": "https://github.com/magickbase/hw-app-ckb",
   "publishConfig": {
     "access": "public"
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "main": "lib/Ckb.js",
   "module": "lib-es/Ckb.js",
   "license": "Apache-2.0",
