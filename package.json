@@ -1,5 +1,5 @@
 {
-  "name": "hw-app-ckb",
+  "name": "@magickbase/hw-app-ckb",
   "version": "0.1.2",
   "description": "Ledger Hardware Wallet Nervos CKB API",
   "keywords": [
