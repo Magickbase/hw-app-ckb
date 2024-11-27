@@ -3,6 +3,8 @@
 
 ## @magickbase/hw-app-ckb
 
+> This repository is a fork of [obsidiansystems/hw-app-ckb](https://github.com/obsidiansystems/hw-app-ckb)
+
 Ledger Hardware Wallet CKB JavaScript bindings.
 
 ## Maintainers and packagers
