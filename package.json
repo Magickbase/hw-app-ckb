@@ -12,12 +12,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/obsidiansystems/hw-app-ckb"
+    "url": "https://github.com/magickbase/hw-app-ckb"
   },
   "bugs": {
-    "url": "https://github.com/obsidiansystems/hw-app-ckb/issues"
+    "url": "https://github.com/magickbase/hw-app-ckb/issues"
   },
-  "homepage": "https://github.com/LedgerHQ/ledgerjs",
+  "homepage": "https://github.com/magickbase/hw-app-ckb",
   "publishConfig": {
     "access": "public"
   },
