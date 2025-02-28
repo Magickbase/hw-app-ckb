@@ -10,6 +10,34 @@ import { bech32m } from "bech32";
 // The bech32m encoding limit should be increased
 const BECH32_LIMIT = 1023;
 
+// APDU command constants
+const CLA = 0x80;                  // Command class (Nervos app)
+
+// Instruction codes
+// defined at https://github.com/LedgerHQ/app-nervos/blob/develop/src/apdu.h#L21
+const INS_GET_CONFIG = 0x00;       // Get app configuration
+const INS_GET_WALLET_ID = 0x01;    // Get wallet identifier
+const INS_GET_PUBLIC_KEY = 0x02;   // Get wallet public key
+const INS_SIGN_TX = 0x03;          // Sign transaction
+const INS_GET_EXTENDED_PUBKEY = 0x04; // Get extended public key
+const INS_SIGN_MSG = 0x06;         // Sign message
+const INS_SIGN_MSG_HASH = 0x07;    // Sign message hash
+const INS_GET_APP_HASH = 0x09;     // Get app hash
+
+// Parameter 1 (P1) values
+// defined at https://github.com/LedgerHQ/app-nervos/blob/develop/src/apdu_sign.c#L968
+const P1_INIT = 0x00;              // Initialization
+const P1_CONTINUE = 0x01;          // Continuation
+const P1_LAST_MARKER = 0x80;       // Last chunk flag
+const P1_FINAL = 0x81;             // Final chunk (CONTINUE | LAST_MARKER)
+
+// Parameter 2 (P2) values
+const P2_DEFAULT = 0x00;           // Default P2 value
+
+// Other constants
+const MAX_APDU_SIZE = 230;         // Maximum data size per APDU
+const SIGNATURE_SIZE = 65;         // Size of the returned signature (r, s, v)
+
 /**
  * Nervos API
  *
@@ -48,10 +76,6 @@ export default class Ckb {
   async getWalletPublicKey(path: string, testnet: boolean): Promise<string> {
     const bipPath = BIPPath.fromString(path).toPathArray();
 
-    const cla = 0x80;
-    const ins = 0x02;
-    const p1 = 0x00;
-    const p2 = 0x00;
     const data = Buffer.alloc(1 + bipPath.length * 4);
 
     data.writeUInt8(bipPath.length, 0);
@@ -59,7 +83,7 @@ export default class Ckb {
       data.writeUInt32BE(segment, 1 + index * 4);
     });
 
-    const response = await this.transport.send(cla, ins, p1, p2, data);
+    const response = await this.transport.send(CLA, INS_GET_PUBLIC_KEY, P1_INIT, P2_DEFAULT, data);
 
     const publicKeyLength = response[0];
     const publicKey = response.slice(1, 1 + publicKeyLength);
@@ -293,8 +317,8 @@ export default class Ckb {
     version: string,
     hash: string,
   }> {
-    const response1 = await this.transport.send(0x80, 0x00, 0x00, 0x00);
-    const response2 = await this.transport.send(0x80, 0x09, 0x00, 0x00);
+    const response1 = await this.transport.send(CLA, INS_GET_CONFIG, P1_INIT, P2_DEFAULT);
+    const response2 = await this.transport.send(CLA, INS_GET_APP_HASH, P1_INIT, P2_DEFAULT);
     return {
       version: "" + response1[0] + "." + response1[1] + "." + response1[2],
       hash: response2.slice(0, -3).toString("latin1") // last 3 bytes should be 0x009000
@@ -311,43 +335,152 @@ export default class Ckb {
    * "0x69c46b6dd072a2693378ef4f5f35dcd82f826dc1fdcc891255db5870f54b06e6"
    */
   async getWalletId(): Promise<string> {
-    const response = await this.transport.send(0x80, 0x01, 0x00, 0x00);
+    const response = await this.transport.send(
+      CLA, 
+      INS_GET_WALLET_ID, 
+      P1_INIT, 
+      P2_DEFAULT
+    );
 
     const result = response.slice(0, 32).toString("hex");
 
     return result;
   }
 
+  /**
+   * Sign a message with the Ledger device using a specific BIP32 path
+   * 
+   * @param {string} path - BIP32 path to derive the key for signing (e.g. "44'/309'/0'/0/0")
+   * @param {string} rawMsgHex - Hex string of the message to be signed
+   * @param {boolean} displayHex - Whether to display the message as hex (true) or as text (false) on the device
+   * @return {string} - Hex string of the signature (65 bytes: r, s, v components)
+   * @example
+   * const signature = await ckb.signMessage("44'/309'/0'/0/0", "48656c6c6f20776f726c64", false);
+   */
   async signMessage(
     path: string,
     rawMsgHex: string,
     displayHex: bool
   ): Promise<string> {
+    // Convert BIP32 path string to array of integers
     const bipPath = BIPPath.fromString(path).toPathArray();
+    
+    // Prepend "Nervos Message:" to prevent message signing from being used to sign transactions
+    // This is a security measure known as "domain separation"
     const magicBytes = Buffer.from("Nervos Message:");
     const rawMsg = Buffer.concat([magicBytes, Buffer.from(rawMsgHex, "hex")]);
 
-    //Init apdu
+    // Step 1: Send initialization APDU with BIP path and display preferences
+    // Format: [displayHex(1), pathLength(1), path(4*pathLength)]
     let rawPath = Buffer.alloc(1 + 1 + bipPath.length * 4);
-    rawPath.writeInt8(displayHex, 0);
-    rawPath.writeInt8(bipPath.length, 1);
+    rawPath.writeInt8(displayHex, 0);                // First byte: display as hex flag
+    rawPath.writeInt8(bipPath.length, 1);            // Second byte: number of path components
     bipPath.forEach((segment, index) => {
-      rawPath.writeUInt32BE(segment, 2 + index * 4);
+      rawPath.writeUInt32BE(segment, 2 + index * 4); // Following bytes: path components (4 bytes each)
     });
-    await this.transport.send(0x80, 0x06, 0x00, 0x00, rawPath);
+    
+    // Send initialization command to the device
+    await this.transport.send(
+      CLA, 
+      INS_SIGN_MSG, 
+      P1_INIT, 
+      P2_DEFAULT, 
+      rawPath
+    );
 
-    // Msg Chunking
-    const maxApduSize = 230;
-    let txFullChunks = Math.floor(rawMsg.length / maxApduSize);
-    for (let i = 0; i < txFullChunks; i++) {
-      let data = rawMsg.slice(i*maxApduSize, (i+1)*maxApduSize);
-      await this.transport.send(0x80, 0x06, 0x01, 0x00, data);
+    // Step 2: Send message data in chunks due to APDU size limitations
+    const fullChunksCount = Math.floor(rawMsg.length / MAX_APDU_SIZE);
+    
+    // Send all complete chunks except the last one
+    for (let i = 0; i < fullChunksCount; i++) {
+      const chunkStart = i * MAX_APDU_SIZE;
+      const chunkEnd = (i + 1) * MAX_APDU_SIZE;
+      const chunkData = rawMsg.slice(chunkStart, chunkEnd);
+      
+      // Send continuation APDU with chunk data
+      await this.transport.send(
+        CLA, 
+        INS_SIGN_MSG, 
+        P1_CONTINUE, 
+        P2_DEFAULT, 
+        chunkData
+      );
     }
 
-    let lastOffset = Math.floor(rawMsg.length / maxApduSize) * maxApduSize;
-    let lastData = rawMsg.slice(lastOffset, lastOffset+maxApduSize);
-    let response = await this.transport.send(0x80, 0x06, 0x81, 0x00, lastData);
-    return response.slice(0,65).toString("hex");
+    // Step 3: Send the final chunk and receive the signature
+    const lastChunkOffset = fullChunksCount * MAX_APDU_SIZE;
+    const lastChunkData = rawMsg.slice(lastChunkOffset);
+    
+    // Send final chunk with the "last chunk" flag set
+    const response = await this.transport.send(
+      CLA, 
+      INS_SIGN_MSG, 
+      P1_FINAL,     // 0x81 = 0x01 (continue) | 0x80 (last chunk)
+      P2_DEFAULT, 
+      lastChunkData
+    );
+    
+    // Extract and return the signature (first 65 bytes of the response)
+    return response.slice(0, SIGNATURE_SIZE).toString("hex");
+  }
+
+  /**
+   * Sign a pre-computed message hash with the Ledger device using a specific BIP32 path
+   *
+   * @param {string} path - BIP32 path to derive the key for signing (e.g. "44'/309'/0'/0/0")
+   * @param {string} messageHashHex - Hex string of the 32-byte message hash to be signed
+   * @param {boolean} displayHash - Whether to display the hash on the device
+   * @return {string} - Hex string of the signature (65 bytes: r, s, v components)
+   * @example
+   * const hash = "9bd9f5a5389a5fa929e9c4cca2d5c81a462c3b8f0ef65a95c9fa252a1c8f1b0f";
+   * const signature = await ckb.signMessageHash("44'/309'/0'/0/0", hash, true);
+   */
+  async signMessageHash(
+    path: string,
+    messageHashHex: string,
+    displayHash: bool = true
+  ): Promise<string> {
+    // Validate the message hash
+    if (!messageHashHex || messageHashHex.length !== 64) {
+      throw new Error("Message hash must be a 32-byte (64 hex characters) value");
+    }
+
+    // Convert BIP32 path string to array of integers
+    const bipPath = BIPPath.fromString(path).toPathArray();
+
+    // Convert the message hash from hex to a Buffer
+    const messageHash = Buffer.from(messageHashHex, "hex");
+
+    // Step 1: Send initialization APDU with BIP path and display preference
+    // Format: [displayHash(1), pathLength(1), path(4*pathLength)]
+    let rawPath = Buffer.alloc(1 + 1 + bipPath.length * 4);
+    rawPath.writeInt8(displayHash ? 1 : 0, 0);      // First byte: display hash flag
+    rawPath.writeInt8(bipPath.length, 1);           // Second byte: number of path components
+    bipPath.forEach((segment, index) => {
+      rawPath.writeUInt32BE(segment, 2 + index * 4); // Following bytes: path components (4 bytes each)
+    });
+
+    // Send initialization command to the device
+    await this.transport.send(
+      CLA,
+      INS_SIGN_MSG_HASH,
+      P1_INIT,
+      P2_DEFAULT,
+      rawPath
+    );
+
+    // Step 2: Send the message hash and receive the signature
+    // The message hash is sent in a single APDU as it's only 32 bytes
+    const response = await this.transport.send(
+      CLA,
+      INS_SIGN_MSG_HASH,
+      P1_FINAL,     // 0x81 = 0x01 (continue) | 0x80 (last chunk)
+      P2_DEFAULT,
+      messageHash
+    );
+
+    // Extract and return the signature (first 65 bytes of the response)
+    return response.slice(0, SIGNATURE_SIZE).toString("hex");
   }
 
 }
