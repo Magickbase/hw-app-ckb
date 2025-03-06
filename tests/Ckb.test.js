@@ -280,3 +280,24 @@ test("ckb.signMessage", async () => {
 
   expect(result).toEqual("be13155a7f6815c715f7dcdc797038e1d5e03621a716ce9aafa2265408ab36833b262855b79e28c99a43ed8dc046577e3cd7445e0f5a8c2a8ebcb7092c53141d029000");
 });
+
+test("ckb.signMessageHash", async () => {
+  const Transport = createTransportReplayer(
+    RecordStore.fromString(`
+    => 800700001600018000002c80000135800000000000000100000000
+    <= 00009000
+    => 800781009bd9f5a5389a5fa929e9c4cca2d5c81a462c3b8f0ef65a95c9fa252a1c8f1b0f
+    <= 3045022100a8cb47a4c3e6e6e5b19e4e73b916b4c6ba5f5817e6222a05f8c4a35d8b61071d022032c3f5e156b3d0d3a21f0c9c97c949c4cb8f4193d171d4fe4cdf62ae0bf3137d019000
+    `)
+  );
+
+  const transport = await Transport.open();
+
+  const ckb = new Ckb(transport);
+
+  // Test with a sample 32-byte message hash
+  const messageHash = "9bd9f5a5389a5fa929e9c4cca2d5c81a462c3b8f0ef65a95c9fa252a1c8f1b0f";
+  const result = await ckb.signMessageHash("m/44'/309'/0'/1/0", messageHash, true);
+
+  expect(result).toEqual("3045022100a8cb47a4c3e6e6e5b19e4e73b916b4c6ba5f5817e6222a05f8c4a35d8b61071d022032c3f5e156b3d0d3a21f0c9c97c949c4cb8f4193d171d4fe4cdf62ae0bf3137d019000");
+});

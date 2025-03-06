@@ -21,6 +21,7 @@ const INS_GET_PUBLIC_KEY = 0x02;   // Get wallet public key
 const INS_SIGN_TX = 0x03;          // Sign transaction
 const INS_GET_EXTENDED_PUBKEY = 0x04; // Get extended public key
 const INS_SIGN_MSG = 0x06;         // Sign message
+const INS_SIGN_MSG_HASH = 0x07;    // Sign message hash
 const INS_GET_APP_HASH = 0x09;     // Get app hash
 
 // Parameter 1 (P1) values
@@ -419,6 +420,65 @@ export default class Ckb {
       lastChunkData
     );
     
+    // Extract and return the signature (first 65 bytes of the response)
+    return response.slice(0, SIGNATURE_SIZE).toString("hex");
+  }
+
+  /**
+   * Sign a pre-computed message hash with the Ledger device using a specific BIP32 path
+   *
+   * @param {string} path - BIP32 path to derive the key for signing (e.g. "44'/309'/0'/0/0")
+   * @param {string} messageHashHex - Hex string of the 32-byte message hash to be signed
+   * @param {boolean} displayHash - Whether to display the hash on the device
+   * @return {string} - Hex string of the signature (65 bytes: r, s, v components)
+   * @example
+   * const hash = "9bd9f5a5389a5fa929e9c4cca2d5c81a462c3b8f0ef65a95c9fa252a1c8f1b0f";
+   * const signature = await ckb.signMessageHash("44'/309'/0'/0/0", hash, true);
+   */
+  async signMessageHash(
+    path: string,
+    messageHashHex: string,
+    displayHash: bool = true
+  ): Promise<string> {
+    // Validate the message hash
+    if (!messageHashHex || messageHashHex.length !== 64) {
+      throw new Error("Message hash must be a 32-byte (64 hex characters) value");
+    }
+
+    // Convert BIP32 path string to array of integers
+    const bipPath = BIPPath.fromString(path).toPathArray();
+
+    // Convert the message hash from hex to a Buffer
+    const messageHash = Buffer.from(messageHashHex, "hex");
+
+    // Step 1: Send initialization APDU with BIP path and display preference
+    // Format: [displayHash(1), pathLength(1), path(4*pathLength)]
+    let rawPath = Buffer.alloc(1 + 1 + bipPath.length * 4);
+    rawPath.writeInt8(displayHash ? 1 : 0, 0);      // First byte: display hash flag
+    rawPath.writeInt8(bipPath.length, 1);           // Second byte: number of path components
+    bipPath.forEach((segment, index) => {
+      rawPath.writeUInt32BE(segment, 2 + index * 4); // Following bytes: path components (4 bytes each)
+    });
+
+    // Send initialization command to the device
+    await this.transport.send(
+      CLA,
+      INS_SIGN_MSG_HASH,
+      P1_INIT,
+      P2_DEFAULT,
+      rawPath
+    );
+
+    // Step 2: Send the message hash and receive the signature
+    // The message hash is sent in a single APDU as it's only 32 bytes
+    const response = await this.transport.send(
+      CLA,
+      INS_SIGN_MSG_HASH,
+      P1_FINAL,     // 0x81 = 0x01 (continue) | 0x80 (last chunk)
+      P2_DEFAULT,
+      messageHash
+    );
+
     // Extract and return the signature (first 65 bytes of the response)
     return response.slice(0, SIGNATURE_SIZE).toString("hex");
   }
