@@ -1,7 +1,9 @@
 [Github](https://github.com/LedgerHQ/ledgerjs/),
 [Ledger Devs Slack](https://ledger-dev.slack.com/)
 
-## @obsidiansystems/hw-app-ckb
+## @magickbase/hw-app-ckb
+
+> This repository is a fork of [obsidiansystems/hw-app-ckb](https://github.com/obsidiansystems/hw-app-ckb)
 
 Ledger Hardware Wallet CKB JavaScript bindings.
 
@@ -15,7 +17,7 @@ for this package.
 Here is a sample app for Node:
 
     let Transport = require("@ledgerhq/hw-transport-node-hid").default;
-    let Ckb = require("@obsidiansystems/hw-app-ckb").default;
+    let Ckb = require("@magickbase/hw-app-ckb").default;
 
     const getWalletId = async () => {
       const transport = await Transport.create();
@@ -101,7 +103,7 @@ Nervos API
 #### Examples
 
 ```javascript
-import Ckb from "@obsidiansystems/hw-app-ckb";
+import Ckb from "@magickbase/hw-app-ckb";
 const ckb = new Ckb(transport);
 ```
 

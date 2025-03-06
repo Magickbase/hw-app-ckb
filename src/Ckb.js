@@ -42,7 +42,7 @@ const SIGNATURE_SIZE = 65;         // Size of the returned signature (r, s, v)
  * Nervos API
  *
  * @example
- * import Ckb from "@obsidiansystems/hw-app-ckb";
+ * import Ckb from "@magickbase/hw-app-ckb";
  * const ckb = new Ckb(transport);
  */
 export default class Ckb {

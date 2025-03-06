@@ -87,13 +87,13 @@ function fromStringEnum(val) {
     // If the last bit is 0, it indicates using code hash to locate the contract code. 
     // The first 7 bits prepresent the VM version to run the contract code.
     case "type":
-      return 0b0000000_1;
+      return 0b00000001;
     case "data":
-      return 0b0000000_0;
+      return 0b00000000;
     case "data1":
-      return 0b0000001_0;
+      return 0b00000010;
     case "data2":
-      return 0b0000010_0;
+      return 0b00000100;
     default:
     throw new Error("Not a valid byte representation: "+val);
     }
